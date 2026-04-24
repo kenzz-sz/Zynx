@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zynx OS - Elite Interface</title>
+    <style>
+        /* =========================================
+           1. BASE & BACKGROUND
+           ========================================= */
+        body {
+            background-image: url("https://raw.githubusercontent.com/kenzz-sz/SATURN/main/bg.jpg");
+            background-color: #0a0a0a;
+            background-size: cover;
+            background-position: center;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            color: white;
+            /* Mencegah highlight biru saat tap di mobile */
+            -webkit-tap-highlight-color: transparent; 
+        }
+
+        /* =========================================
+           2. STRICT SCENE MANAGEMENT (FIXED OVERLAP)
+           ========================================= */
+        #app-container {
+            position: relative;
+            width: 340px;
+            height: 85vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .panel {
+            position: absolute; /* Kunci agar tidak bertumpuk ke samping */
+            background: rgba(25, 25, 25, 0.6);
+            padding: 30px 20px;
+            border: 0.1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 28px;
+            backdrop-filter: blur(25px) saturate(2);
+            -webkit-backdrop-filter: blur(25px) saturate(2);
+            width: 100%;
+            box-sizing: border-box;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+            font-weight: 999;
+            
+            /* Status Awal: Tersembunyi */
+            opacity: 0;
+            visibility: hidden;
+            transform: scale(0.95);
+            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+            z-index: 1;
+        }
+
+        /* Scene Aktif */
+        .panel.active-scene {
+            opacity: 1;
+            visibility: visible;
+            transform: scale(1);
+            z-index: 10;
+        }
+
+        /* =========================================
+           3. INPUTS & BUTTONS
+           ========================================= */
+        input.zynx {
+            box-sizing: border-box;
+            width: 100%;
+            margin-bottom: 15px;
+            color: white;
+            font-size: 16px;
+            font-weight: 999;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            outline: none;
+            transition: 0.3s;
+        }
+        input.zynx:focus { border-color: rgba(255,255,255,0.5); background: rgba(0,0,0,0.7); }
+
+        button.btn-primary {
+            width: 100%;
+            color: black;
+            font-size: 16px;
+            font-weight: 999;
+            background: #fff;
+            padding: 15px;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 5px;
+        }
+        button.btn-primary:active { transform: scale(0.96); opacity: 0.8; }
+
+        /* =========================================
+           4. IOS ACCORDION CATEGORY SYSTEM
+           ========================================= */
+        .category {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 18px;
+            margin-bottom: 12px;
+            overflow: hidden; /* Penting untuk animasi */
+        }
+
+        .cat-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            cursor: pointer;
+            background: transparent;
+            transition: background 0.2s;
+        }
+        .cat-header:active { background: rgba(255, 255, 255, 0.05); }
+
+        .cat-icon { font-size: 18px; margin-right: 10px; }
+        
+        .cat-chevron {
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+            opacity: 0.6;
+        }
+
+        /* Trik Animasi Halus iOS Menggunakan CSS Grid */
+        .cat-content {
+            display: grid;
+            grid-template-rows: 0fr;
+            transition: grid-template-rows 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .cat-inner {
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 0 16px; /* Padding vertikal diatur di child agar animasi tidak lompat */
+        }
+
+        /* Saat Kategori Terbuka */
+        .category.open .cat-content { grid-template-rows: 1fr; }
+        .category.open .cat-chevron { transform: rotate(90deg); }
+
+        /* Fitur Buttons dalam Kategori */
+        .feature-item {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .feature-item:last-child { border-bottom: none; margin-bottom: 10px; }
+        .feature-item:first-child { margin-top: 10px; }
+        .feature-item:active { opacity: 0.5; }
+
+        /* =========================================
+           5. LOADING UI SYSTEM (TETAP DIPERTAHANKAN)
+           ========================================= */
+        .loader-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(25px) saturate(1.5);
+            display: none; justify-content: center; align-items: center;
+            z-index: 99999; opacity: 0; transition: opacity 0.4s ease;
+        }
+
+        .loader-card {
+            width: 260px; padding: 35px 20px;
+            background: rgba(20, 20, 20, 0.85);
+            border-radius: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            text-align: center;
+            transform: scale(0.85); transition: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.2);
+        }
+
+        .spinner-ring {
+            width: 45px; height: 45px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top: 3px solid #fff; border-radius: 50%;
+            margin: 0 auto; animation: spinX 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        @keyframes spinX { to { transform: rotate(360deg); } }
+
+        .check-badge {
+            position: absolute; bottom: -8px; right: -8px;
+            width: 28px; height: 28px; background: #34C759;
+            border-radius: 50%; border: 3px solid #141414;
+            display: flex; justify-content: center; align-items: center;
+            transform: scale(0); animation: pop 0.4s 0.3s forwards cubic-bezier(0.2, 1.5, 0.4, 1);
+        }
+        @keyframes pop { to { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        
+        <div id="scene-login" class="panel active-scene">
+            <h1 style="text-align: center; margin: 0 0 5px 0; font-size: 28px; letter-spacing: 1px;">ZYNX OS</h1>
+            <p style="text-align: center; font-size: 13px; opacity: 0.5; margin-bottom: 25px;">Authorized Personnel Only</p>
+            
+            <input type="text" id="inp-user" class="zynx" placeholder="Username">
+            <input type="password" id="inp-pass" class="zynx" placeholder="Password">
+            
+            <button class="btn-primary" onclick="App.login()">LOGIN</button>
+            <p id="login-err" style="color: #ff453a; font-size: 13px; text-align: center; display: none; margin-top: 15px;">Invalid Credentials.</p>
+        </div>
+
+        <div id="scene-dashboard" class="panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0; font-size: 22px;">CORE MENU</h2>
+                <span onclick="localStorage.setItem(`zynxacount`, JSON.stringify({}));
+                document.getElementById('inp-user').value = '';
+        document.getElementById('inp-pass').value = '';
+        localStorage.removeItem('zynxacount');
+        App.changeScene('scene-login')" style="color: #ff453a; font-size: 14px; cursor: pointer;">LOGOUT</span>
+            </div>
+
+            <div class="category" id="cat-modules">
+                <div class="cat-header" onclick="App.toggleCategory('cat-modules')">
+                    <div><span class="cat-icon">⚙️</span> System Modules</div>
+                    <div class="cat-chevron">▶</div>
+                </div>
+                <div class="cat-content">
+                    <div class="cat-inner">
+                        <!--<div class="feature-item" onclick="App.triggerBypass()">
+                            <span>Execute Bypass</span>
+                            <span style="opacity: 0.5;">Run</span>
+                        </div>
+                        <div class="feature-item" onclick="App.triggerToken()">
+                            <span>Generate Token</span>
+                            <span style="opacity: 0.5;">Get</span>
+                        </div>-->
+                        <div class="feature-item" onclick="App.changeScene('scene-bug')">
+                            <span>Open Bug Menu</span>
+                            <span style="color: #0A84FF;">Open</span>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <div class="category" id="cat-settings">
+                <div class="cat-header" onclick="App.toggleCategory('cat-settings')">
+                    <div><span class="cat-icon">👤</span> Preferences</div>
+                    <div class="cat-chevron">▶</div>
+                </div>
+                <div class="cat-content">
+                    <div class="cat-inner">
+                        <div class="feature-item" onclick="App.changeScene('scene-custom')">
+                            <span>Open Editor Workspace</span>
+                            <span style="color: #0A84FF;">Open</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="scene-custom" class="panel">
+            <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                <span onclick="App.changeScene('scene-dashboard')" style="color: #0A84FF; font-size: 16px; cursor: pointer; display: flex; align-items: center;">
+                    <span style="font-size: 20px; margin-right: 5px;">‹</span> Back
+                </span>
+                <h2 style="margin: 0; font-size: 20px; text-align: center; flex-grow: 1; padding-right: 40px;">WORKSPACE</h2>
+            </div>
+            
+            <div style="background: rgba(0,0,0,0.3); border-radius: 16px; padding: 20px; text-align: center; border: 1px dashed rgba(255,255,255,0.2);">
+                <p style="opacity: 0.6; font-size: 14px;">[ ISI SCENE KAMU DI SINI ]</p>
+                <p style="opacity: 0.6; font-size: 12px; font-weight: normal;">Tambahkan input, tombol, atau iframe sesuai kebutuhan fiturnya.</p>
+            </div>
+            
+            <button class="btn-primary" style="margin-top: 20px;" onclick="App.changeScene('scene-dashboard')">Save & Return</button>
+        </div>
+        <div id="scene-bug" class="panel">
+            <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                <span onclick="App.changeScene('scene-dashboard')" style="color: #0A84FF; font-size: 16px; cursor: pointer; display: flex; align-items: center;">
+                    <span style="font-size: 20px; margin-right: 5px;">‹</span> Back
+                </span>
+                <h2 style="margin: 0; font-size: 20px; text-align: center; flex-grow: 1; padding-right: 40px;">Send Bug Menu</h2>
+            </div>
+            <input id="sendbugvaa" class="zynx" placeholder="6208xxxxxxxxxx">
+
+<button class="btn-primary" style="margin-top: 0px;" onclick="
+    const asu = document.getElementById('sendbugvaa').value;
+
+    // 1. Validasi awal (tanpa Loader agar tidak bug)
+    if (!asu || !asu.startsWith('62')) {
+        Loader.showCopyBox('INVALID', 'Nomor harus diawali dengan 62!');
+        return; // Berhenti di sini jika salah
+    }
+
+    // 2. Jika lolos validasi, jalankan proses
+    Loader.show('PREPARE SYSTEM...');
+
+    setTimeout(() => {
+        // 3. PENTING: Jangan pakai Loader.close() jika ingin menimpa dengan Success
+        // Langsung panggil Loader.success untuk transisi yang mulus
+        Loader.success('Bug Sent Successfully!', () => {
+            // Callback setelah animasi sukses selesai (Opsional)
+            console.log('Proses Selesai');
+        });
+    }, 2000);
+">SEND BUG</button>
+
+
+            
+        </div>
+
+    </div>
+
+    <div id="global-loader" class="loader-overlay">
+        <div class="loader-card" id="loader-card">
+            <div id="loader-content"></div>
+        </div>
+    </div>
+
+    <script>
+        const ACCOUNTS = [{ usn: "admin", pw: "1234" }];
+
+        // =========================================
+        // LOADING SYSTEM
+        // =========================================
+        const Loader = {
+            overlay: document.getElementById('global-loader'),
+            card: document.getElementById('loader-card'),
+            content: document.getElementById('loader-content'),
+
+            show(text) {
+                this.content.innerHTML = `<div class="spinner-ring"></div><p style="margin-top: 20px; font-size: 15px; color: rgba(255,255,255,0.8);">${text}</p>`;
+                this.overlay.style.display = 'flex';
+                setTimeout(() => { this.overlay.style.opacity = '1'; this.card.style.transform = 'scale(1)'; }, 10);
+            },
+
+            success(message, callback) {
+                this.content.style.opacity = '0';
+                setTimeout(() => {
+                    this.content.innerHTML = `
+                        <div style="position: relative; width: 70px; height: 70px; margin: 0 auto 15px;">
+                            <img src="https://raw.githubusercontent.com/kenzz-sz/SATURN/main/icon.jpg" onerror="this.src='https://via.placeholder.com/70'" style="width: 100%; height: 100%; border-radius: 20px; object-fit: cover;">
+                            <div class="check-badge">
+                                <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L4.5 8.5L9.5 3.5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </div>
+                        </div>
+                        <h2 style="margin: 0; font-size: 20px;">${message}</h2>
+                    `;
+                    this.content.style.opacity = '1';
+                    this.card.style.transform = 'scale(1.05)';
+                    setTimeout(() => this.card.style.transform = 'scale(1)', 200);
+                    setTimeout(() => this.close(callback), 2000);
+                }, 300);
+            },
+
+            showCopyBox(title, textValue) {
+                this.content.style.opacity = '0';
+                setTimeout(() => {
+                    this.content.innerHTML = `
+                        <h3 style="margin: 0 0 15px 0;">${title}</h3>
+                        <div style="background: rgba(0,0,0,0.5); padding: 15px; border-radius: 12px; font-family: monospace; font-size: 16px; color: #0A84FF; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 15px;">${textValue}</div>
+                        <button class="btn-primary" id="btn-copy" onclick="Loader.copy('${textValue}')">COPY TEXT</button>
+                        <button onclick="Loader.close()" style="background:transparent; border:none; color:white; opacity:0.6; margin-top:15px; cursor:pointer; font-weight:bold;">CLOSE</button>
+                    `;
+                    this.content.style.opacity = '1';
+                }, 300);
+            },
+
+            copy(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const btn = document.getElementById('btn-copy');
+                    btn.innerText = "COPIED!"; btn.style.background = "#34C759"; btn.style.color = "white";
+                });
+            },
+
+            close(callback) {
+                this.overlay.style.opacity = '0';
+                this.card.style.transform = 'scale(0.9)';
+                setTimeout(() => {
+                    this.overlay.style.display = 'none';
+                    if (callback) callback();
+                }, 400);
+            }
+        };
+
+        // =========================================
+        // MAIN APP LOGIC
+        // =========================================
+        const App = {
+            login() {
+                const u = document.getElementById('inp-user').value;
+                const p = document.getElementById('inp-pass').value;
+                if (ACCOUNTS.find(acc => acc.usn === u && acc.pw === p)) {
+                    Loader.show("AUTHENTICATING...");
+                    setTimeout(() => Loader.success("Welcome Back!", () => this.changeScene('scene-dashboard')), 1500);
+                    localStorage.setItem("zynxacount", JSON.stringify({usn: u, pass: p}))
+                } else {
+                    const err = document.getElementById('login-err');
+                    err.style.display = 'block';
+                    setTimeout(() => err.style.display = 'none', 3000);
+                }
+            },
+            logina() {
+                const u = document.getElementById('inp-user').value;
+                const p = document.getElementById('inp-pass').value;
+                if (ACCOUNTS.find(acc => acc.usn === u && acc.pw === p)) {
+                    Loader.show("AUTHENTICATING...");
+                    setTimeout(() => Loader.success("Welcome Back!", () => this.changeScene('scene-dashboard')), 1500);
+                    localStorage.setItem("zynxacount", JSON.stringify({usn: u, pass: p}))
+                } else {
+                    const err = document.getElementById('login-err');
+                    err.style.display = 'block';
+                    setTimeout(() => err.style.display = 'none', 3000);
+                }
+            },
+
+            // Fungsi pindah scene yang sangat ketat agar tidak tumpang tindih
+            changeScene(sceneId) {
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active-scene'));
+                document.getElementById(sceneId).classList.add('active-scene');
+            },
+
+            // Animasi Akordeon Buka Tutup
+            toggleCategory(catId) {
+                const cat = document.getElementById(catId);
+                // Tutup kategori lain (opsional, hapus 2 baris di bawah jika ingin bisa buka banyak sekaligus)
+                document.querySelectorAll('.category').forEach(c => {
+                    if (c.id !== catId) c.classList.remove('open');
+                });
+                cat.classList.toggle('open');
+            },
+
+            // Eksekusi Fitur
+            triggerBypass() {
+                Loader.show("INJECTING...");
+                setTimeout(() => Loader.success("Success!", null), 2000);
+            },
+
+            triggerToken() {
+                Loader.show("GENERATING...");
+                setTimeout(() => Loader.showCopyBox("SECURE TOKEN", "ZYNX-8821-X"), 1500);
+            }
+        };
+        let iss = {}
+        const isada = localStorage.getItem("zynxacount")
+        const ayama = {"usn": "", "pass": ""}
+        if(isada) iss = JSON.parse(isada);
+        if (isada){
+        document.getElementById('inp-user').value = iss.usn;
+        document.getElementById('inp-pass').value = iss.pass;
+            App.logina()
+        }
+    </script>
+    <script>
+    function lg(){
+            const UltraLoading = {
+    overlay: null,
+    card: null,
+    
+    _injectStyles() {
+        if (document.getElementById('ultra-ui-style')) return;
+        const style = document.createElement('style');
+        style.id = 'ultra-ui-style';
+        style.innerHTML = `
+            @keyframes ultra-spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            @keyframes pulse-bg {
+                0% { opacity: 0.5; transform: scale(1); }
+                50% { opacity: 0.8; transform: scale(1.05); }
+                100% { opacity: 0.5; transform: scale(1); }
+            }
+            .spinner-ring {
+                width: 50px; height: 50px;
+                border: 3px solid transparent;
+                border-top: 3px solid #007AFF; /* iOS Blue */
+                border-right: 3px solid #007AFF;
+                border-radius: 50%;
+                animation: ultra-spin 0.6s cubic-bezier(0.5, 0.1, 0.4, 0.9) infinite;
+            }
+            .status-text {
+                font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto;
+                font-weight: 500; letter-spacing: -0.02em;
+                margin-top: 15px; color: rgba(255,255,255,0.9);
+            }
+        `;
+        document.head.appendChild(style);
+    },
+
+    show() {
+        this._injectStyles();
+
+        // 1. Overlay dengan Animasi Gradien Berjalan
+        this.overlay = document.createElement('div');
+        Object.assign(this.overlay.style, {
+            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            backdropFilter: 'blur(25px) saturate(180%)',
+            webkitBackdropFilter: 'blur(25px) saturate(180%)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 99999, opacity: 0, transition: 'opacity 0.6s ease'
+        });
+
+        // 2. Card UI Komplex (Glassmorphism + Border Gradient)
+        this.card = document.createElement('div');
+        Object.assign(this.card.style, {
+            position: 'relative', width: '220px', padding: '40px 20px',
+            background: 'linear-gradient(135deg, rgba(60,60,60,0.7) 0%, rgba(30,30,30,0.8) 100%)',
+            borderRadius: '32px', border: '1px solid rgba(255,255,255,0.15)',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.1)',
+            textAlign: 'center', opacity: 0,
+            transform: 'scale(0.8) translateY(30px)',
+            transition: 'all 0.7s cubic-bezier(0.15, 0.85, 0.35, 1.1)'
+        });
+
+        this.card.innerHTML = `
+            <div id="ui-content" style="transition: all 0.5s ease;">
+                <div style="position: relative; display: inline-block;">
+                    <div class="spinner-ring"></div>
+                    <div style="position: absolute; top:50%; left:50%; transform:translate(-50%, -50%); width: 30px; height: 30px; background: rgba(255,255,255,0.05); border-radius: 50%;"></div>
+                </div>
+                <div class="status-text">Memproses...</div>
+            </div>
+        `;
+
+        this.overlay.appendChild(this.card);
+        document.body.appendChild(this.overlay);
+
+        // Start Animasi
+        requestAnimationFrame(() => {
+            this.overlay.style.opacity = 1;
+            this.card.style.opacity = 1;
+            this.card.style.transform = 'scale(1) translateY(0)';
+        });
+    },
+
+    finish() {
+        const content = document.getElementById('ui-content');
+        content.style.opacity = 0;
+        content.style.transform = 'translateY(-10px)';
+
+        setTimeout(() => {
+            // UI Selesai yang lebih keren
+            content.innerHTML = `
+                <div style="position: relative; margin-bottom: 20px;">
+                    <div style="width: 80px; height: 80px; background: rgba(255,255,255,0.1); border-radius: 22px; margin: 0 auto; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(255,255,255,0.2);">
+                         <img src="assets/img/icon.png" onerror="this.src='https://raw.githubusercontent.com/kenzz-sz/SATURN/main/icon.jpg'" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>
+                    <div style="position: absolute; bottom: -5px; right: 60px; width: 24px; height: 24px; background: #34C759; border-radius: 50%; border: 3px solid #282828; display: flex; align-items: center; justify-content: center;">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L4.5 8.5L9.5 3.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                </div>
+                <h2 style="margin: 0; font-size: 22px; font-weight: 700; color: white; font-family: sans-serif;">Hello!</h2>
+                <p style="margin: 5px 0 0; font-size: 14px; color: rgba(255,255,255,0.5); font-family: sans-serif;">Berhasil dimuat</p>
+            `;
+            content.style.opacity = 1;
+            content.style.transform = 'translateY(0)';
+            
+            // Efek haptic-like bounce pada card
+            this.card.style.transform = 'scale(1.03)';
+            setTimeout(() => this.card.style.transform = 'scale(1)', 200);
+        }, 500);
+
+        // Tutup otomatis
+        setTimeout(() => this.hide(), 3500);
+    },
+
+    hide() {
+        if (!this.overlay) return;
+        this.card.style.transform = 'scale(0.9) translateY(20px)';
+        this.card.style.opacity = 0;
+        this.overlay.style.opacity = 0;
+        setTimeout(() => {
+            this.overlay.remove();
+            this.overlay = null;
+        }, 600);
+    }
+};
+
+// Panggil:
+UltraLoading.show();
+setTimeout(() => UltraLoading.finish(), 3000);
+
+        }
+        if(!isada){
+            const UltraLoading = {
+    overlay: null,
+    card: null,
+    
+    _injectStyles() {
+        if (document.getElementById('ultra-ui-style')) return;
+        const style = document.createElement('style');
+        style.id = 'ultra-ui-style';
+        style.innerHTML = `
+            @keyframes ultra-spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            @keyframes pulse-bg {
+                0% { opacity: 0.5; transform: scale(1); }
+                50% { opacity: 0.8; transform: scale(1.05); }
+                100% { opacity: 0.5; transform: scale(1); }
+            }
+            .spinner-ring {
+                width: 50px; height: 50px;
+                border: 3px solid transparent;
+                border-top: 3px solid #007AFF; /* iOS Blue */
+                border-right: 3px solid #007AFF;
+                border-radius: 50%;
+                animation: ultra-spin 0.6s cubic-bezier(0.5, 0.1, 0.4, 0.9) infinite;
+            }
+            .status-text {
+                font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto;
+                font-weight: 500; letter-spacing: -0.02em;
+                margin-top: 15px; color: rgba(255,255,255,0.9);
+            }
+        `;
+        document.head.appendChild(style);
+    },
+
+    show() {
+        this._injectStyles();
+
+        // 1. Overlay dengan Animasi Gradien Berjalan
+        this.overlay = document.createElement('div');
+        Object.assign(this.overlay.style, {
+            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            backdropFilter: 'blur(25px) saturate(180%)',
+            webkitBackdropFilter: 'blur(25px) saturate(180%)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 99999, opacity: 0, transition: 'opacity 0.6s ease'
+        });
+
+        // 2. Card UI Komplex (Glassmorphism + Border Gradient)
+        this.card = document.createElement('div');
+        Object.assign(this.card.style, {
+            position: 'relative', width: '220px', padding: '40px 20px',
+            background: 'linear-gradient(135deg, rgba(60,60,60,0.7) 0%, rgba(30,30,30,0.8) 100%)',
+            borderRadius: '32px', border: '1px solid rgba(255,255,255,0.15)',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.1)',
+            textAlign: 'center', opacity: 0,
+            transform: 'scale(0.8) translateY(30px)',
+            transition: 'all 0.7s cubic-bezier(0.15, 0.85, 0.35, 1.1)'
+        });
+
+        this.card.innerHTML = `
+            <div id="ui-content" style="transition: all 0.5s ease;">
+                <div style="position: relative; display: inline-block;">
+                    <div class="spinner-ring"></div>
+                    <div style="position: absolute; top:50%; left:50%; transform:translate(-50%, -50%); width: 30px; height: 30px; background: rgba(255,255,255,0.05); border-radius: 50%;"></div>
+                </div>
+                <div class="status-text">Memproses...</div>
+            </div>
+        `;
+
+        this.overlay.appendChild(this.card);
+        document.body.appendChild(this.overlay);
+
+        // Start Animasi
+        requestAnimationFrame(() => {
+            this.overlay.style.opacity = 1;
+            this.card.style.opacity = 1;
+            this.card.style.transform = 'scale(1) translateY(0)';
+        });
+    },
+
+    finish() {
+        const content = document.getElementById('ui-content');
+        content.style.opacity = 0;
+        content.style.transform = 'translateY(-10px)';
+
+        setTimeout(() => {
+            // UI Selesai yang lebih keren
+            content.innerHTML = `
+                <div style="position: relative; margin-bottom: 20px;">
+                    <div style="width: 80px; height: 80px; background: rgba(255,255,255,0.1); border-radius: 22px; margin: 0 auto; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(255,255,255,0.2);">
+                         <img src="assets/img/icon.png" onerror="this.src='https://raw.githubusercontent.com/kenzz-sz/SATURN/main/icon.jpg'" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>
+                    <div style="position: absolute; bottom: -5px; right: 60px; width: 24px; height: 24px; background: #34C759; border-radius: 50%; border: 3px solid #282828; display: flex; align-items: center; justify-content: center;">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L4.5 8.5L9.5 3.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                </div>
+                <span style="margin: 0; margin-top: -38px; font-size: 16px; font-weight: 700; color: white; font-family: sans-serif;">Hello!, Welcome To Zynx!</span>
+                <p style="margin: 5px 0 0; font-size: 14px; color: rgba(255,255,255,0.5); font-family: sans-serif;">Sucsess Instaled</p>
+            `;
+            content.style.opacity = 1;
+            content.style.transform = 'translateY(0)';
+            
+            // Efek haptic-like bounce pada card
+            this.card.style.transform = 'scale(1.03)';
+            setTimeout(() => this.card.style.transform = 'scale(1)', 200);
+        }, 500);
+
+        // Tutup otomatis
+        setTimeout(() => this.hide(), 3500);
+    },
+
+    hide() {
+        if (!this.overlay) return;
+        this.card.style.transform = 'scale(0.9) translateY(20px)';
+        this.card.style.opacity = 0;
+        this.overlay.style.opacity = 0;
+        setTimeout(() => {
+            this.overlay.remove();
+            this.overlay = null;
+        }, 600);
+    }
+};
+
+// Panggil:
+UltraLoading.show();
+setTimeout(() => UltraLoading.finish(), 3000);
+
+        }
+    </script>
+</body>
+</html>
